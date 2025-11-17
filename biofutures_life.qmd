@@ -38,17 +38,12 @@ aves <- occ_download_prep(
   pwd = "RC)Y}GHr.i8$YE8",
   email = "calummaney@gmail.com")
 
-
 myredlistkey <- 'fd3cbfc9044a98a1a44be6c867f633b05a984aab7f730ba304067120ca94f6f0'
 ```
 
 ## 1. Retrieve GBIF observation data
 
-![](images/clipboard-470818951.jpeg)
-
-Follow the above schema from the paper, we retrieve and filter GBIF observation data to train our models.
-
-We are going to use all mammals, all birds.
+Follow the schema from the paper, we retrieve and filter GBIF observation data to train our models.
 
 ```{r}
 gbif_call <- occ_download(
