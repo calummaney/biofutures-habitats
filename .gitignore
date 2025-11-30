@@ -47,3 +47,9 @@ po/*~
 
 # RStudio Connect folder
 rsconnect/
+
+# GeoTIFF and .zip files - don't save data
+.tif
+.zip
+.rds
+
