@@ -1,4 +1,4 @@
-## ----setup----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+## ----setup------------------------------------------------------------------------------------------------------
 #Data handling
 library(dplyr)
 library(tidyr)
@@ -57,7 +57,8 @@ hab_levels <- data.frame(
 myredlistkey <- 'kYaDcjScQUgVR2EkcCQxU8ZTnY7v3wMs9LiF'
 
 
-## ----gbifCall-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+## ----gbifCall---------------------------------------------------------------------------------------------------
+print("Checking downloads...")
 if(length(list.files("raw_data/gbif/"))<2){
 gbif_call <- occ_download(
   pred_or(
@@ -99,7 +100,7 @@ saveRDS(zip_file_path,"raw_data/gbif/zip_file_path.rds")
 }
 
 
-## ----downloadHILDA--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+## ----downloadHILDA----------------------------------------------------------------------------------------------
 if(!file.exists("raw_data/hilda/hildap_vGLOB-1.0_geotiff_wgs84/hildap_GLOB-v1.0_lulc-states/")){
 hilda_url <- "https://download.pangaea.de/dataset/921846/files/hildap_vGLOB-1.0_geotiff.zip"
 
@@ -115,13 +116,14 @@ if (file.exists("raw_data/hilda_plus.zip")) {
 }
 
 
-## ----gbifUnzip------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+## ----gbifUnzip--------------------------------------------------------------------------------------------------
+print("Loading GBIF data...")
 zip_file_path <- readRDS("raw_data/gbif/zip_file_path.rds")
 
 gbif_data <- occ_download_import(x = zip_file_path,path = ".") #est. 5 mins
 
 
-## ----gbifGetIUCNIDfunction------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+## ----gbifGetIUCNIDfunction--------------------------------------------------------------------------------------
 getIUCNtaxonID <- function(gbif_taxonKey = gbif_data[1,]$taxonKey){
   res <- GET(paste0("http://api.gbif.org/v1/species/",gbif_taxonKey,"/iucnRedListCategory"))
   
@@ -138,7 +140,8 @@ getIUCNtaxonID <- function(gbif_taxonKey = gbif_data[1,]$taxonKey){
 }
 
 
-## ----gbifGetAndSaveIUCNtags-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+## ----gbifGetAndSaveIUCNtags-------------------------------------------------------------------------------------
+print("Checking IUCN Habitat data...")
 if(!file.exists("wip/gbif_data_IUCN_codes.rds")){
 #We only needed to run this once
 gbif_taxonKeys <- unique(gbif_data$taxonKey) 
@@ -152,7 +155,7 @@ saveRDS(gbif_data_IUCN_codes,"wip/gbif_data_IUCN_codes.rds")
 }
 
 
-## ----gbifMargeIUCNKeys----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+## ----gbifMargeIUCNKeys------------------------------------------------------------------------------------------
 gbif_data_IUCN_codes <- readRDS("wip/gbif_data_IUCN_codes.rds")
 gbif_taxonKeys <- unique(gbif_data$taxonKey) 
 
@@ -162,7 +165,7 @@ taxa.df <- data.frame(
 )
 
 
-## ----iucnGetTaxonCodes----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+## ----iucnGetTaxonCodes------------------------------------------------------------------------------------------
 #iucn_hab <- read.csv("raw_data/Habitats/WCMC_Habitat_Info2_Aug2014_AA.csv")
 
 iucnTaxonCodes <- gbif_data_IUCN_codes |> unlist()
@@ -171,7 +174,7 @@ iucnTaxonCodes <- gsub("_.*","",iucnTaxonCodes)
 iucnTaxonCodes <- as.numeric(iucnTaxonCodes)
 
 
-## ----iucnGetHabsFromAPI---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+## ----iucnGetHabsFromAPI-----------------------------------------------------------------------------------------
 if(!file.exists("wip/iucnHabitats.rds")){
 getHabitats <- function(i){
   #API call to retrieve the latest assessment of a given species, and 
@@ -206,7 +209,8 @@ saveRDS(iucnHabitats,"wip/iucnHabitats.rds")
 }
 
 
-## ----joinDataPrepareIucnHabs----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+## ----joinDataPrepareIucnHabs------------------------------------------------------------------------------------
+print("Joining habitat data...")
 iucn_hab <- readRDS("wip/iucnHabitats.rds") #Sub in new API data
 
 iucn_hab_suit <- iucn_hab[iucn_hab$suitability == "Suitable",]
@@ -216,7 +220,7 @@ iucn_hab_suit <- iucn_hab_suit[,c("taxonid","hab_code","suitability")] |> unique
 
 
 
-## ----joinRemoveGeneralists------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+## ----joinRemoveGeneralists--------------------------------------------------------------------------------------
 taxaToUse <- iucn_hab_suit |> 
   group_by(taxonid) |> 
   mutate(l1hab = gsub("_.*","",hab_code)) |>
@@ -229,16 +233,16 @@ taxaToUse <- iucn_hab_suit |>
 iucn_hab_suit <- iucn_hab_suit |> filter(taxonid %in% taxaToUse)
 
 
-## ----joinIucnToGBIFdata---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+## ----joinIucnToGBIFdata-----------------------------------------------------------------------------------------
 taxa_iucn.df <- left_join(taxa.df,iucn_hab_suit,by=c("iucn_ID"="taxonid")) |>
   filter(suitability == "Suitable")
 
 
-## ----joinPivotHabitatsOut-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+## ----joinPivotHabitatsOut---------------------------------------------------------------------------------------
 taxa_iucn_wide.df <- pivot_wider(taxa_iucn.df,names_from = hab_code,values_from = suitability)
 
 
-## ----joinFilterNoHabitatData----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+## ----joinFilterNoHabitatData------------------------------------------------------------------------------------
 gbif_withHabs <- gbif_data |> 
   filter(taxonKey %in% taxa_iucn.df$gbif_ID) |>
   transmute(
@@ -251,13 +255,13 @@ gbif_withHabs <- gbif_data |>
   )
 
 
-## ----joinHabitatsToObservations-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+## ----joinHabitatsToObservations---------------------------------------------------------------------------------
 obs_habs.df <- gbif_withHabs |>
   left_join(taxa_iucn_wide.df, by = c("taxonKey"="gbif_ID"))
-print("done")
 
 
-## ----prepareHILDA---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+## ----prepareHILDA-----------------------------------------------------------------------------------------------
+print("Attaching land use data...")
 hilda_files <- lapply(lu_years,function(x){list.files(path = "raw_data/hilda/hildap_vGLOB-1.0_geotiff_wgs84/hildap_GLOB-v1.0_lulc-states/",pattern = x,full.names = TRUE)}) |> unlist()
 
 #Load and stack the path vector into one raster
@@ -274,11 +278,10 @@ for(thisYr in names(hilda)){
  levels(hilda[[thisYr]]) <- lu_levels
 }
 
-#Finished, prepared data:
-hilda
+#Finished, prepared data.
 
 
-## ----luAttachToObservations-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+## ----luAttachToObservations-------------------------------------------------------------------------------------
 getLUfromObs <- function(obs, year = 2019){
   #Construct sf from the observation records for this year
   thisYear_obs <- obs[obs$year == year,]
@@ -294,8 +297,8 @@ getLUfromObs <- function(obs, year = 2019){
 obs_habs_lu.sf <- lapply(lu_years,function(yr){getLUfromObs(obs_habs.df,year=yr)}) |> bind_rows() #est. 3 min
 
 
-## ----mergeHabitats--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-
+## ----mergeHabitats----------------------------------------------------------------------------------------------
+print("Starting final modelling dataset...")
 #Function to find column names matching a headline habitat code (level 1)
 listMatchingHabs <- function(codeL1){
   allCols <- colnames(obs_habs_lu.sf)
@@ -338,7 +341,9 @@ model.df <- obs_habs_lu.sf |>
   droplevels() #Remove unneeded geographic levels
 
 
-## -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+## ---------------------------------------------------------------------------------------------------------------
+print("Removing duplicate observations...")
+
 #Detecting duplicate observations
 #model.df |> group_by(taxonKey,geometry,year) |> tally() |> group_by(n) |> tally()
 #There definitely are some, so we need to delete them.
@@ -349,7 +354,9 @@ model.df <- model.df |> unique.data.frame() # takes ~5 mins
 model.df <- model.df |> select(-geometry) #We no longer need this now
 
 
-## -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+## ---------------------------------------------------------------------------------------------------------------
+print("Removing species with less than 10 observations...")
+
 spCounts <- model.df |> group_by(taxonKey) |> tally()
 
 lowNspecies <- spCounts$taxonKey[spCounts$n < 10]
@@ -357,7 +364,9 @@ lowNspecies <- spCounts$taxonKey[spCounts$n < 10]
 model.df <- model.df |> filter(!taxonKey %in% lowNspecies)
 
 
-## -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+## ---------------------------------------------------------------------------------------------------------------
+print("Randomly subsampling species until no species makes up more than 2% of observations in its class...")
+
 #Work out classes per species
 classes <- gbif_data |> select(class,taxonKey) |> unique.data.frame() #takes a minute
 
@@ -405,16 +414,16 @@ model.df <- lapply(unique(model.df$class),subsampleByClass) |> bind_rows()
 model.df <- model.df |> select(-c(class,species_count,toRemove,randomRank))
 
 
-## ----cleanEnvironment-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+## ----cleanEnvironment-------------------------------------------------------------------------------------------
 #rm(list = setdiff(ls(), c("model.df","hilda")))
 gc() #and tidy up memory
 
 
-## ----testAssociationsTable------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+## ----testAssociationsTable--------------------------------------------------------------------------------------
 table("LU forest" = model.df$HILDA_LU=="Forest", "Habitat forest" = model.df$hab_1)
 
 
-## ----modelFunction--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+## ----modelFunction----------------------------------------------------------------------------------------------
 modelHabAssocs <- function(LandUse){
 
   #How many positive samples for "forest" land use class?
@@ -481,7 +490,8 @@ modelHabAssocs <- function(LandUse){
 }
 
 
-## ----modelEvaluateAllParallel---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+## ----modelEvaluateAllParallel-----------------------------------------------------------------------------------
+print("Starting model runs...")
 
 lu_names <- unique(model.df$HILDA_LU)
 
@@ -498,7 +508,7 @@ stopCluster(modellers)
 names(a) <- lu_names
 
 
-## ----function_extractOddsRatios-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+## ----function_extractOddsRatios---------------------------------------------------------------------------------
 getOddsRatios <- function(thisRegression){
   thisModel <- thisRegression$model
   
@@ -513,7 +523,7 @@ getOddsRatios <- function(thisRegression){
 }
 
 
-## ----extractOddsRatios----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+## ----extractOddsRatios------------------------------------------------------------------------------------------
 obsFrame <- lapply(a,function(x){sum(model.df$HILDA_LU==x$LandUse)}) |> unlist() |> data.frame()
 colnames(obsFrame) <- "Observations"
 
@@ -528,17 +538,15 @@ modelFigure <- cbind(obsFrame,allOdds) |> round(2)
 modelFigure |> kable()
 
 
-## ----calculateTertiles----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+## ----calculateTertiles------------------------------------------------------------------------------------------
 posAssoc_tertiles <- modelFigure[,2:ncol(modelFigure)]
 posAssoc_tertiles <- posAssoc_tertiles[posAssoc_tertiles>=1]
 posAssoc_tertiles <- quantile(posAssoc_tertiles,probs = seq(0,1,1/3))
 
-posAssoc_tertiles
-
 strongLimit <- as.numeric(posAssoc_tertiles[3])
 
 
-## ----filterStrongAssocs_function------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+## ----filterStrongAssocs_function--------------------------------------------------------------------------------
 getStrongAssocs <- function(LandUse){
   theseCoefs <- allOdds[LandUse,]
   
@@ -551,7 +559,9 @@ getStrongAssocs <- function(LandUse){
 getStrongAssocs(LandUse = "Forest")
 
 
-## ----finalHabMaps---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+## ----finalHabMaps-----------------------------------------------------------------------------------------------
+print("Generating habitat maps...")
+
 createHabMap <- function(hab = "Forest",lu = hilda[[1]]){
   
   #Find all land uses associated with the habitat
@@ -571,10 +581,10 @@ mapHabs <- function(LU){
 testYear <- mapHabs(hilda$X2019) |> rast()
 
 
-## -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+## ---------------------------------------------------------------------------------------------------------------
 
 
 
-## -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+## ---------------------------------------------------------------------------------------------------------------
 knitr::purl("biofutures_life.qmd")
 
